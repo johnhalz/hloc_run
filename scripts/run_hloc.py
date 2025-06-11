@@ -2,11 +2,15 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from hloc import extract_features, match_features, pairs_from_exhaustive
+from hloc import (
+    extract_features,
+    match_features,
+    pairs_from_exhaustive,
+    reconstruction,
+)
 from loguru import logger
 from pycolmap import Reconstruction
 
-from hloc_run.hloc_helpers.reconstruction import reconstruct
 from hloc_run.localized_image import get_image_files
 
 
@@ -35,73 +39,70 @@ def evaluate_args():
     return args.input
 
 
-def trigger_hloc(image_files: list[Path], input_folder: Path) -> Reconstruction:
-    feature_conf = extract_features.confs["disk"]
-    matcher_conf = match_features.confs["disk+lightglue"]
-
-    # Output paths
+def setup_hloc_env(input_folder: Path):
     output_folder = input_folder / f"hloc_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    output_folder.mkdir(parents=True, exist_ok=True)
-
+    output_folder.mkdir(exist_ok=True, parents=True)
     sfm_pairs = output_folder / "pairs-sfm.txt"
+    loc_pairs = output_folder / "pairs-loc.txt"
     sfm_dir = output_folder / "sfm"
     features = output_folder / "features.h5"
     matches = output_folder / "matches.h5"
 
-    # Extract and match features
-    logger.info(f"Extracting and matching features from {len(image_files)} images")
-    if not features.exists():
-        extract_features.main(
-            conf=feature_conf,
-            image_dir=input_folder,
-            export_dir=output_folder,
-            image_list=image_files,
-            feature_path=features,
-        )
-    else:
-        logger.info(f"Features already exist at {features.as_posix()}")
+    feature_conf = extract_features.confs["disk"]
+    matcher_conf = match_features.confs["disk+lightglue"]
 
-    logger.info(f"Creating pairs from {len(image_files)} images")
-    image_files_str = [img.as_posix() for img in image_files]
-
-    if not sfm_pairs.exists():
-        pairs_from_exhaustive.main(sfm_pairs, image_list=image_files_str)
-    else:
-        logger.info(f"Pairs already exist at {sfm_pairs.as_posix()}")
-
-    if not matches.exists():
-        match_features.main(
-            conf=matcher_conf,
-            pairs=sfm_pairs,
-            features=features,
-            matches=matches,
-        )
-    else:
-        logger.info(f"Matches already exist at {matches.as_posix()}")
-
-    logger.success("Extracted and matched features")
-
-    # Run SFM
-    logger.info("Running SFM")
-    model = reconstruct(
-        sfm_dir=sfm_dir,
-        image_dir=input_folder,
-        pairs=sfm_pairs,
-        features=features,
-        matches=matches,
-        image_list=image_files,
+    return (
+        output_folder,
+        sfm_pairs,
+        loc_pairs,
+        sfm_dir,
+        features,
+        matches,
+        feature_conf,
+        matcher_conf,
     )
-    logger.success("SFM completed")
+
+
+def run_mapping(
+    input_folder: Path, feature_conf, matcher_conf, sfm_pairs, features, matches, sfm_dir
+) -> Reconstruction:
+    # Getting image files from the input folder
+    references = get_image_files(input_folder)
+    references = [p.relative_to(input_folder).as_posix() for p in references]
+    logger.info(f"Found {len(references)} images in {input_folder}")
+
+    # Extracting features and matching across image pairs
+    extract_features.main(feature_conf, input_folder, image_list=references, feature_path=features)
+    pairs_from_exhaustive.main(sfm_pairs, image_list=references)
+    match_features.main(matcher_conf, sfm_pairs, features=features, matches=matches)
+
+    # Run incremental SfM
+    model = reconstruction.main(
+        sfm_dir, input_folder, sfm_pairs, features, matches, image_list=references
+    )
 
     return model
 
 
 def main(input_folder: Path):
-    image_files = get_image_files(input_folder)
-    logger.info(f"Found {len(image_files)} images in {input_folder}")
+    output_folder, sfm_pairs, _, sfm_dir, features, matches, feature_conf, matcher_conf = (
+        setup_hloc_env(input_folder)
+    )
 
-    hloc_model = trigger_hloc(image_files, input_folder)
-    pass
+    model = run_mapping(
+        input_folder,
+        feature_conf,
+        matcher_conf,
+        sfm_pairs,
+        features,
+        matches,
+        sfm_dir,
+    )
+
+    # Save the model to a file
+    model.write_binary(output_folder)
+
+    logger.success(f"Mapping completed. Model saved in {output_folder}")
 
 
 if __name__ == "__main__":
