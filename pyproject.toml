@@ -4,4 +4,69 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "hloc",
+    "loguru>=0.7.3",
+    "numpy>=2.3.0",
+    "pydantic>=2.11.5",
+    "scipy>=1.15.3",
+]
+
+[[project.authors]]
+name = "John Halazonetis"
+email = "john.halazonetis@scandit.com"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+exclude = [
+    ".DS_Store",
+    ".coverage",
+    ".git",
+    ".gitattributes",
+    ".gitignore",
+    ".gitmodules",
+    ".idea",
+    ".md",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".toml",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "build",
+    "dist",
+    "htmlcov",
+    "node_modules",
+    "package-lock.json",
+]
+line-length = 100
+indent-width = 4
+target-version = "py312"
+
+[tool.tomlsort]
+in_place = true
+sort_first = ["project", "dependency-groups"]
+sort_table_keys = false
+sort_inline_tables = true
+sort_inline_arrays = false
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = false
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["W"]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.uv.sources]
+hloc = { git = "https://github.com/cvg/Hierarchical-Localization.git" }
