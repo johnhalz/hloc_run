@@ -2,10 +2,11 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from hloc import extract_features, match_features, pairs_from_exhaustive, reconstruction
+from hloc import extract_features, match_features, pairs_from_exhaustive
 from loguru import logger
 from pycolmap import Reconstruction
 
+from hloc_run.hloc_helpers.reconstruction import reconstruct
 from hloc_run.localized_image import get_image_files
 
 
@@ -61,8 +62,10 @@ def trigger_hloc(image_files: list[Path], input_folder: Path) -> Reconstruction:
         logger.info(f"Features already exist at {features.as_posix()}")
 
     logger.info(f"Creating pairs from {len(image_files)} images")
+    image_files_str = [img.as_posix() for img in image_files]
+
     if not sfm_pairs.exists():
-        pairs_from_exhaustive.main(sfm_pairs, image_list=image_files)
+        pairs_from_exhaustive.main(sfm_pairs, image_list=image_files_str)
     else:
         logger.info(f"Pairs already exist at {sfm_pairs.as_posix()}")
 
@@ -80,7 +83,7 @@ def trigger_hloc(image_files: list[Path], input_folder: Path) -> Reconstruction:
 
     # Run SFM
     logger.info("Running SFM")
-    model = reconstruction.main(
+    model = reconstruct(
         sfm_dir=sfm_dir,
         image_dir=input_folder,
         pairs=sfm_pairs,
