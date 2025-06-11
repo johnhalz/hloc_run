@@ -28,7 +28,7 @@ def evaluate_args():
 
 
 def main(input_folder: Path):
-    loaded_model = Reconstruction.read_binary(input_folder.as_posix())
+    loaded_model = Reconstruction(path=input_folder)
 
     assert isinstance(loaded_model, Reconstruction), (
         "Loaded model is not a valid Reconstruction object"
